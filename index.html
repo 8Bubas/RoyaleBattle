@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>ClashBattle Online</title>
+    <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-database-compat.js"></script>
+    <style>
+        body { background: #222; color: white; font-family: 'Arial', sans-serif; margin: 0; padding: 0; display: flex; flex-direction: column; align-items: center; touch-action: manipulation; }
+        
+        #status-bar { width: 100%; background: #111; padding: 10px 0; text-align: center; color: #f1c40f; font-weight: bold; border-bottom: 2px solid #444; }
+
+        #arena { 
+            width: 95vw; height: 50vh; background: #4caf50; position: relative; 
+            margin-top: 20px; border: 4px solid #2e7d32; border-radius: 10px; 
+            overflow: hidden; box-shadow: inset 0 0 50px rgba(0,0,0,0.2);
+        }
+
+        /* Река посередине */
+        #river { position: absolute; left: 50%; top: 0; width: 40px; height: 100%; background: #2980b9; transform: translateX(-50%); opacity: 0.6; }
+
+        .tower { 
+            width: 50px; height: 70px; position: absolute; bottom: 10px; 
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            font-size: 40px; border-radius: 5px; z-index: 10;
+        }
+        #tower-blue { left: 5px; background: #1976d2; border: 2px solid #0d47a1; }
+        #tower-red { right: 5px; background: #d32f2f; border: 2px solid #b71c1c; }
+
+        .hp-bar { width: 60px; height: 8px; background: #000; position: absolute; top: -15px; border: 1px solid #fff; }
+        .hp-fill { height: 100%; background: #4caf50; width: 100%; transition: 0.3s; }
+
+        .unit { 
+            position: absolute; bottom: 20px; width: 35px; height: 35px; 
+            border-radius: 50%; display: flex; align-items: center; justify-content: center; 
+            font-size: 20px; font-weight: bold; z-index: 5; border: 2px solid rgba(0,0,0,0.3);
+            transition: left 0.1s linear;
+        }
+
+        .controls { 
+            width: 100%; max-width: 500px; display: flex; flex-direction: column; 
+            align-items: center; gap: 15px; padding: 20px; background: #333; 
+            border-radius: 20px 20px 0 0; position: fixed; bottom: 0;
+        }
+
+        .mana-box { font-size: 24px; color: #3498db; font-weight: bold; margin-bottom: 5px; }
+        
+        .spawn-btn { 
+            width: 80%; padding: 15px; border: none; border-radius: 12px; 
+            color: white; font-size: 18px; font-weight: bold; cursor: pointer;
+            box-shadow: 0 5px #000; active { transform: translateY(3px); box-shadow: 0 2px #000; }
+        }
+        .btn-blue { background: #1e88e5; }
+        .btn-red { background: #e53935; }
+    </style>
+</head>
+<body onload="init()">
+
+    <div id="status-bar">ПОДКЛЮЧЕНИЕ К СЕТИ...</div>
+
+    <div id="arena">
+        <div id="river"></div>
+        
+        <div id="tower-blue" class="tower">
+            <div class="hp-bar"><div id="hp-1" class="hp-fill"></div></div>
+            🏰
+        </div>
+
+        <div id="tower-red" class="tower">
+            <div class="hp-bar"><div id="hp-2" class="hp-fill"></div></div>
+            🏰
+        </div>
+    </div>
+
+    <div class="controls">
+        <div class="mana-box">ЭЛИКСИР: <span id="mana-val">5</span> / 10</div>
+        <button id="main-btn" class="spawn-btn" onclick="sendUnit()" style="display:none;">ВЫПУСТИТЬ ВОИНА (3)</button>
+    </div>
+
+<script>
+    let db;
+    let mySide = null;
+    let mana = 5;
+    let tower1HP = 100;
+    let tower2HP = 100;
+
+    function init() {
+        const config = {
+            apiKey: "AIzaSyCMgd0KOSCfyJ0RWk3qhpk6eMOnKPhLNbA",
+            authDomain: "bubaschat.firebaseapp.com",
+            databaseURL: "https://bubaschat-default-rtdb.firebaseio.com",
+            projectId: "bubaschat"
+        };
+        firebase.initializeApp(config);
+        db = firebase.database();
+
+        // Определение стороны
+        db.ref('clash_room/p1').once('value', s => {
+            if (!s.val()) {
+                mySide = 'blue';
+                db.ref('clash_room/p1').set(true);
+                setupUI("ТЫ ЗА СИНИХ", "btn-blue");
+            } else {
+                mySide = 'red';
+                setupUI("ТЫ ЗА КРАСНЫХ", "btn-red");
+            }
+        });
+
+        // Следим за новыми воинами
+        db.ref('clash_units').on('child_added', (snap) => {
+            const data = snap.val();
+            spawnUnitUI(data.id, data.side);
+        });
+
+        // Следим за уроном по башням
+        db.ref('clash_towers').on('value', snap => {
+            const data = snap.val();
+            if (data) {
+                if (data.t1 !== undefined) document.getElementById('hp-1').style.width = data.t1 + '%';
+                if (data.t2 !== undefined) document.getElementById('hp-2').style.width = data.t2 + '%';
+            }
+        });
+    }
+
+    function setupUI(text, btnClass) {
+        document.getElementById('status-bar').innerText = text;
+        const btn = document.getElementById('main-btn');
+        btn.style.display = 'block';
+        btn.classList.add(btnClass);
+    }
+
+    function sendUnit() {
+        if (mana >= 3) {
+            mana -= 3;
+            const id = "u_" + Date.now();
+            db.ref('clash_units/' + id).set({ id: id, side: mySide });
+        }
+    }
+
+    function spawnUnitUI(id, side) {
+        const u = document.createElement('div');
+        u.className = 'unit';
+        u.innerHTML = (side === 'blue') ? '⚔️' : '👹';
+        u.style.background = (side === 'blue') ? '#3498db' : '#e74c3c';
+        
+        let x = (side === 'blue') ? 10 : 85;
+        u.style.left = x + '%';
+        document.getElementById('arena').appendChild(u);
+
+        let move = setInterval(() => {
+            if (side === 'blue') x += 1; else x -= 1;
+            u.style.left = x + '%';
+
+            // Атака башни
+            if (x >= 88 && side === 'blue') {
+                clearInterval(move);
+                u.remove();
+                hitTower(2);
+            } else if (x <= 10 && side === 'red') {
+                clearInterval(move);
+                u.remove();
+                hitTower(1);
+            }
+        }, 100);
+    }
+
+    function hitTower(num) {
+        if (mySide === 'blue' && num === 2) {
+            tower2HP -= 5;
+            db.ref('clash_towers/t2').set(tower2HP);
+        } else if (mySide === 'red' && num === 1) {
+            tower1HP -= 5;
+            db.ref('clash_towers/t1').set(tower1HP);
+        }
+    }
+
+    // Эликсир и интерфейс
+    setInterval(() => {
+        if (mana < 10) mana += 0.5;
+        document.getElementById('mana-val').innerText = Math.floor(mana);
+    }, 1000);
+</script>
+</body>
+</html>
+
