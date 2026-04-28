@@ -3,114 +3,144 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>ClashBattle Online</title>
+    <title>Bubas Royale PRO</title>
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-database-compat.js"></script>
     <style>
-        body { background: #1a1a1a; color: white; font-family: sans-serif; margin: 0; display: flex; flex-direction: column; align-items: center; user-select: none; touch-action: manipulation; }
-        #status { background: #333; width: 100%; padding: 12px; text-align: center; font-weight: bold; color: #00ff00; border-bottom: 3px solid #444; }
-        #arena { width: 95vw; height: 50vh; background: #2d5a27; position: relative; margin: 15px 0; border: 4px solid #1e3d1a; border-radius: 15px; overflow: hidden; box-shadow: inset 0 0 40px rgba(0,0,0,0.5); }
-        .river { position: absolute; left: 50%; width: 40px; height: 100%; background: #2980b9; transform: translateX(-50%); opacity: 0.4; }
-        .tower { width: 55px; height: 65px; position: absolute; bottom: 20px; font-size: 45px; display: flex; flex-direction: column; align-items: center; }
-        #t1 { left: 10px; } #t2 { right: 10px; }
-        .hp { width: 55px; height: 8px; background: #000; border: 1px solid #fff; position: absolute; top: -12px; border-radius: 4px; overflow: hidden; }
-        .hp-in { height: 100%; background: #00ff00; width: 100%; transition: 0.3s; }
-        .unit { position: absolute; bottom: 30px; width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 24px; z-index: 100; transition: left 0.1s linear; border: 2px solid rgba(0,0,0,0.3); }
-        .ui { width: 100%; background: #222; padding: 25px; border-radius: 25px 25px 0 0; position: fixed; bottom: 0; display: flex; flex-direction: column; align-items: center; border-top: 3px solid #444; }
-        .mana-bar { color: #3498db; font-size: 22px; font-weight: bold; margin-bottom: 12px; }
-        .btn { width: 90%; padding: 20px; border: none; border-radius: 15px; color: white; font-size: 22px; font-weight: bold; cursor: pointer; box-shadow: 0 6px #000; text-transform: uppercase; }
-        .btn:active { transform: translateY(3px); box-shadow: 0 2px #000; }
-        .blue { background: #2980b9; } .red { background: #c0392b; }
+        body { margin: 0; background: #222; display: flex; justify-content: center; align-items: center; height: 100vh; overflow: hidden; }
+        canvas { border: 4px solid #444; border-radius: 10px; box-shadow: 0 0 20px rgba(0,0,0,0.5); }
     </style>
 </head>
-<body onload="init()">
-
-    <div id="status">ИНИЦИАЛИЗАЦИЯ...</div>
-
-    <div id="arena">
-        <div class="river"></div>
-        <div id="t1" class="tower"><div class="hp"><div id="hp1" class="hp-in"></div></div>🏰</div>
-        <div id="t2" class="tower"><div class="hp"><div id="hp2" class="hp-in"></div></div>🏰</div>
-    </div>
-
-    <div class="ui">
-        <div class="mana-bar">💧 ЭЛИКСИР: <span id="mana">0</span> / 10</div>
-        <button id="spawn" class="btn" onclick="spawn()" style="display:none;">В БОЙ! (3)</button>
-    </div>
-
+<body>
 <script>
-    let db, mySide, elix = 5;
+    // ТВОИ КЛЮЧИ (уже вписаны)
+    const firebaseConfig = {
+        apiKey: "AIzaSyCYzLoNr3aS71H4qWAnm5dgUYZhyrSum20",
+        authDomain: "clashbattle-5e0b1.firebaseapp.com",
+        databaseURL: "https://clashbattle-5e0b1-default-rtdb.firebaseio.com",
+        projectId: "clashbattle-5e0b1",
+        appId: "1:715854969334:web:9c1d5601b8bccea8b22fd7"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
 
-    function init() {
-        // ДАННЫЕ С ТВОЕГО СКРИНШОТА №1000013906
-        const firebaseConfig = {
-            apiKey: "AIzaSyCYzLoNr3aS71H4qWAnm5dgUYZhyrSum20",
-            authDomain: "clashbattle-5e0b1.firebaseapp.com",
-            databaseURL: "https://clashbattle-5e0b1-default-rtdb.firebaseio.com",
-            projectId: "clashbattle-5e0b1",
-            storageBucket: "clashbattle-5e0b1.firebasestorage.app",
-            messagingSenderId: "715854969334",
-            appId: "1:715854969334:web:9c1d5601b8bccea8b22fd7"
-        };
+    // НАСТРОЙКИ ДВИЖКА
+    const config = {
+        type: Phaser.AUTO,
+        width: 800,
+        height: 500,
+        physics: { default: 'arcade' },
+        scene: { preload: preload, create: create, update: update }
+    };
 
-        firebase.initializeApp(firebaseConfig);
-        db = firebase.database();
+    const game = new Phaser.Game(config);
+    let mySide, units, towers, elix = 5, elixText, statusText;
 
+    function preload() {
+        // Тут можно будет грузить картинки, пока работаем на фигурах
+    }
+
+    function create() {
+        let scene = this;
+        
+        // РИСУЕМ КАРТУ
+        scene.add.rectangle(400, 250, 800, 500, 0x2d5a27); // Трава
+        scene.add.rectangle(400, 250, 60, 500, 0x2980b9);  // Река
+        scene.add.rectangle(400, 120, 120, 80, 0x7e5a3c); // Мост Верхний
+        scene.add.rectangle(400, 380, 120, 80, 0x7e5a3c); // Мост Нижний
+
+        units = scene.physics.add.group();
+        towers = scene.physics.add.staticGroup();
+
+        // СОЗДАЕМ БАШНИ
+        spawnTower(scene, 80, 250, 'blue');
+        spawnTower(scene, 720, 250, 'red');
+
+        // КТО Я?
         db.ref('clash/p1').once('value', s => {
             if (!s.val()) {
                 mySide = 'blue';
                 db.ref('clash/p1').set(true);
-                startUI("ТЫ ЗА СИНИХ", "blue");
+                statusText.setText('ТЫ ЗА СИНИХ (СЛЕВА)');
             } else {
                 mySide = 'red';
-                startUI("ТЫ ЗА КРАСНЫХ", "red");
+                statusText.setText('ТЫ ЗА КРАСНЫХ (СПРАВА)');
             }
         });
 
-        db.ref('clash/units').on('child_added', s => drawUnit(s.val().id, s.val().side));
-        db.ref('clash/hp').on('value', s => {
-            let d = s.val(); if (!d) return;
-            document.getElementById('hp1').style.width = (d.h1 || 100) + '%';
-            document.getElementById('hp2').style.width = (d.h2 || 100) + '%';
+        // СЛУШАЕМ СПАВН
+        db.ref('clash/units').on('child_added', s => {
+            let d = s.val();
+            spawnUnit(scene, d.side, d.lane);
+        });
+
+        // ИНТЕРФЕЙС
+        elixText = scene.add.text(20, 20, '💧 ЭЛИКСИР: 5', { fontSize: '24px', fontStyle: 'bold', fill: '#fff' });
+        statusText = scene.add.text(400, 20, 'ПОДКЛЮЧЕНИЕ...', { fontSize: '20px', fill: '#fbff00' }).setOrigin(0.5);
+        scene.add.text(400, 470, 'КЛИКАЙ ВВЕРХ ИЛИ ВНИЗ ДЛЯ ВЫСАДКИ (3 эликсира)', { fontSize: '16px', fill: '#ccc' }).setOrigin(0.5);
+
+        // УПРАВЛЕНИЕ
+        scene.input.on('pointerdown', p => {
+            if (elix >= 3) {
+                elix -= 3;
+                let lane = p.y < 250 ? 1 : 2;
+                db.ref('clash/units').push({ side: mySide, lane: lane });
+            }
         });
     }
 
-    function startUI(t, c) {
-        document.getElementById('status').innerText = t;
-        const b = document.getElementById('spawn');
-        b.style.display = 'block'; b.classList.add(c);
+    function spawnTower(scene, x, y, side) {
+        let t = scene.add.rectangle(x, y, 70, 90, side === 'blue' ? 0x3498db : 0xe74c3c);
+        scene.physics.add.existing(t, true);
+        t.hp = 500;
+        t.side = side;
+        towers.add(t);
+        // Текст HP над башней
+        t.hpDisplay = scene.add.text(x, y - 60, '500', { fontSize: '16px', fill: '#fff' }).setOrigin(0.5);
     }
 
-    function spawn() {
-        if (elix >= 3) {
-            elix -= 3;
-            db.ref('clash/units').push({ side: mySide, id: Date.now() });
-        }
+    function spawnUnit(scene, side, lane) {
+        let x = (side === 'blue') ? 140 : 660;
+        let y = (lane === 1) ? 120 : 380;
+        let u = scene.add.circle(x, y, 18, side === 'blue' ? 0x00ffff : 0xffaa00);
+        scene.physics.add.existing(u);
+        u.side = side;
+        u.hp = 100;
+        u.body.setVelocityX(side === 'blue' ? 80 : -80);
+        units.add(u);
     }
 
-    function drawUnit(id, side) {
-        const u = document.createElement('div');
-        u.className = 'unit';
-        u.innerHTML = (side === 'blue') ? '⚔️' : '👹';
-        u.style.background = (side === 'blue') ? '#2980b9' : '#c0392b';
-        let x = (side === 'blue') ? 10 : 85;
-        u.style.left = x + '%';
-        document.getElementById('arena').appendChild(u);
+    function update() {
+        if (elix < 10) elix += 0.015;
+        elixText.setText('💧 ЭЛИКСИР: ' + Math.floor(elix));
 
-        let m = setInterval(() => {
-            if (side === 'blue') x++; else x--;
-            u.style.left = x + '%';
-            if (x >= 90 || x <= 5) {
-                clearInterval(m); u.remove();
-                if (mySide === side) {
-                    let target = (side === 'blue') ? 'h2' : 'h1';
-                    db.ref('clash/hp/' + target).transaction(hp => (hp || 100) - 10);
+        // ДРАКИ МЕЖДУ ЮНИТАМИ
+        game.scene.scenes[0].physics.overlap(units, units, (u1, u2) => {
+            if (u1.side !== u2.side) {
+                u1.hp -= 1; u2.hp -= 1;
+                u1.body.setVelocityX(0); u2.body.setVelocityX(0);
+                u1.setAlpha(0.7); u2.setAlpha(0.7);
+                if (u1.hp <= 0) u1.destroy();
+                if (u2.hp <= 0) u2.destroy();
+            }
+        });
+
+        // УРОН БАШНЯМ
+        game.scene.scenes[0].physics.overlap(units, towers, (u, t) => {
+            if (u.side !== t.side) {
+                u.body.setVelocityX(0);
+                t.hp -= 0.5;
+                t.hpDisplay.setText(Math.floor(t.hp));
+                if (t.hp <= 0) {
+                    t.hpDisplay.setText('DESTROYED');
+                    alert('КОНЕЦ ИГРЫ! ПОБЕДА ' + (u.side === 'blue' ? 'СИНИХ' : 'КРАСНЫХ'));
+                    db.ref('clash').remove(); // Рестарт базы
+                    location.reload();
                 }
             }
-        }, 80);
+        });
     }
-
-    setInterval(() => { if (elix < 10) { elix += 0.2; document.getElementById('mana').innerText = Math.floor(elix); } }, 500);
 </script>
 </body>
 </html>
