@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>BubaBattle Royale</title>
+    <title>BuBattle Royale</title>
     <script src="https://cdn.jsdelivr.net/npm/phaser@3.55.2/dist/phaser.min.js"></script>
     <style>
         body { margin: 0; padding: 0; background-color: #1a252f; display: flex; justify-content: center; align-items: flex-start; min-height: 100vh; overflow: hidden; touch-action: none; }
@@ -50,74 +50,89 @@
             {id:'skeletons', c:1, color:0xffffff}, {id:'prince', c:5, color:0x8e44ad} 
         ];
         window.userDeck = ['knight', 'giant', 'archers', 'fireball', 'minipekka', 'log', 'skeletons', 'prince'];
-
-        const config = {
-            type: Phaser.AUTO, width: 400, height: 800, parent: 'game',
-            physics: { default: 'arcade', arcade: { debug: false } }
-        };
-
-        const MenuScene = {
+                const MenuScene = {
             key: 'MenuScene',
             create: function() {
-                let self = this;
                 this.add.rectangle(200, 400, 400, 800, 0x1a252f);
+                
                 let battleTab = this.add.container(0, 0);
                 let deckTab = this.add.container(0, 0).setVisible(false);
-                battleTab.add(this.add.text(200, 100, 'BUBABATTLE ROYALE', { fontSize: '28px', fill: '#f1c40f', fontStyle: 'bold' }).setOrigin(0.5));
-                
-                let btnBattle = this.add.rectangle(200, 400, 250, 100, 0xe74c3c).setInteractive();
-                let txtBattle = this.add.text(200, 400, 'В БОЙ', { fontSize: '40px', fill: '#fff', fontStyle: 'bold' }).setOrigin(0.5);
+
+                // --- ВКЛАДКА БОЯ ---
+                battleTab.add(this.add.text(200, 100, 'BUBABATTLE ROYALE', { 
+                    fontSize: '32px', fill: '#f1c40f', fontStyle: 'bold', stroke: '#000', strokeThickness: 4 
+                }).setOrigin(0.5));
+
+                let btnBattle = this.add.rectangle(200, 400, 280, 120, 0xe74c3c).setInteractive();
+                btnBattle.setStrokeStyle(4, 0xffffff);
+                let txtBattle = this.add.text(200, 400, 'В БОЙ', { fontSize: '48px', fill: '#fff', fontStyle: 'bold' }).setOrigin(0.5);
                 battleTab.add([btnBattle, txtBattle]);
-                
-                let isSearching = false;
+
                 btnBattle.on('pointerdown', () => {
-                    if (isSearching) return;
-                    isSearching = true; btnBattle.setFillStyle(0xc0392b); txtBattle.setText('ПОИСК...');
-                    get(ref(db, `${gamePath}/players`)).then((snapshot) => {
+                    btnBattle.setFillStyle(0xc0392b);
+                    txtBattle.setText('ПОИСК...');
+                    
+                    get(ref(db, `${gamePath}/players`)).then(snapshot => {
                         const players = snapshot.val() || {};
-                        playerRole = (players['me']) ? 'enemy' : 'me'; isHost = (playerRole === 'me');
-                        let myRef = ref(db, `${gamePath}/players/${playerRole}`);
-                        set(myRef, { ready: true }); onDisconnect(myRef).remove();
+                        if (!players['me']) {
+                            playerRole = 'me';
+                            isHost = true;
+                        } else {
+                            playerRole = 'enemy';
+                            isHost = false;
+                        }
+                        set(ref(db, `${gamePath}/players/${playerRole}`), { ready: true, id: playerId });
+                        onDisconnect(ref(db, `${gamePath}/players/${playerRole}`)).remove();
                     });
+
                     onValue(ref(db, `${gamePath}/players`), (snapshot) => {
-                        const players = snapshot.val() || {};
-                        if (players['me'] && players['me'].ready && players['enemy'] && players['enemy'].ready) {
-                            if (isHost) set(ref(db, `${gamePath}/state`), { startTime: Date.now(), phase: '1x', isOvertime: false, tiebreakerStarted: false, overtimeDecided: false });
-                            self.scene.start('GameScene');
+                        const p = snapshot.val() || {};
+                        if (p['me'] && p['enemy']) {
+                            if (isHost) {
+                                set(ref(db, `${gamePath}/state`), {
+                                    startTime: Date.now(),
+                                    phase: '1x',
+                                    isOvertime: false
+                                });
+                            }
+                            this.scene.start('GameScene');
                         }
                     });
                 });
-                
-                let deckContainer = this.add.container(0, 0); deckTab.add(deckContainer);
-                let selectedColId = null;
+
+                // --- ВКЛАДКА КОЛОДЫ ---
+                let deckTitle = this.add.text(200, 50, 'ВАША КОЛОДА', { fontSize: '24px', fill: '#fff' }).setOrigin(0.5);
+                deckTab.add(deckTitle);
+
                 let renderDeck = () => {
-                    deckContainer.removeAll(true);
-                    deckContainer.add(this.add.text(200, 100, 'АКТИВНАЯ КОЛОДА (8 КАРТ)', { fontSize: '18px', fill: '#fff', fontStyle: 'bold' }).setOrigin(0.5));
-                    for(let i=0; i<8; i++) {
-                        let cData = window.allCardsData.find(c => c.id === window.userDeck[i]);
-                        let cx = 65 + (i%4)*90; let cy = 160 + Math.floor(i/4)*95;
-                        let btn = this.add.rectangle(cx, cy, 80, 80, cData.color).setInteractive();
-                        deckContainer.add([btn, this.add.text(cx, cy, cData.id.toUpperCase() + "\n💧" + cData.c, { fontSize: '10px', fill: '#000', align:'center', fontStyle:'bold' }).setOrigin(0.5)]);
-                        btn.on('pointerdown', () => { if (selectedColId && !window.userDeck.includes(selectedColId)) { window.userDeck[i] = selectedColId; selectedColId = null; renderDeck(); } });
+                    for(let i = 0; i < 8; i++) {
+                        let card = window.allCardsData.find(c => c.id === window.userDeck[i]);
+                        let x = 65 + (i % 4) * 90;
+                        let y = 180 + Math.floor(i/4) * 110;
+                        let cardBg = this.add.rectangle(x, y, 80, 100, card.color).setStrokeStyle(2, 0xffffff);
+                        deckTab.add([cardBg, this.add.text(x, y, card.id.toUpperCase() + '\n💧' + card.c, { 
+                            fontSize: '12px', fill: '#fff', align: 'center' 
+                        }).setOrigin(0.5)]);
                     }
-                    window.allCardsData.forEach((cData, i) => {
-                        let cx = 55 + (i%5)*72; let cy = 420 + Math.floor(i/5)*95;
-                        let btn = this.add.rectangle(cx, cy, 65, 80, cData.color).setInteractive();
-                        if (selectedColId === cData.id) btn.setStrokeStyle(3, 0xf1c40f);
-                        deckContainer.add([btn, this.add.text(cx, cy, cData.id.toUpperCase() + "\n💧" + cData.c, { fontSize: '9px', fill: '#000', align:'center', fontStyle:'bold' }).setOrigin(0.5)]);
-                        if (window.userDeck.includes(cData.id)) deckContainer.add(this.add.rectangle(cx, cy, 65, 80, 0x000000, 0.6));
-                        btn.on('pointerdown', () => { if (!window.userDeck.includes(cData.id)) { selectedColId = cData.id; renderDeck(); } });
-                    });
                 };
                 renderDeck();
-                
+
+                // --- НАВИГАЦИЯ (НИЗ) ---
                 this.add.rectangle(200, 750, 400, 100, 0x2c3e50);
-                let navDeck = this.add.rectangle(100, 750, 190, 80, 0x2c3e50).setInteractive();
-                let navBattle = this.add.rectangle(300, 750, 190, 80, 0x34495e).setInteractive();
-                this.add.text(100, 750, '🃏 КОЛОДА', { fontSize: '20px', fill: '#fff', fontStyle: 'bold' }).setOrigin(0.5);
-                this.add.text(300, 750, '⚔️ БОЙ', { fontSize: '20px', fill: '#fff', fontStyle: 'bold' }).setOrigin(0.5);
-                navBattle.on('pointerdown', () => { battleTab.setVisible(true); deckTab.setVisible(false); navBattle.setFillStyle(0x34495e); navDeck.setFillStyle(0x2c3e50); });
-                navDeck.on('pointerdown', () => { battleTab.setVisible(false); deckTab.setVisible(true); navDeck.setFillStyle(0x34495e); navBattle.setFillStyle(0x2c3e50); });
+                let btnDeckNav = this.add.rectangle(100, 750, 180, 70, 0x34495e).setInteractive();
+                let btnBattleNav = this.add.rectangle(300, 750, 180, 70, 0x34495e).setInteractive();
+                
+                this.add.text(100, 750, '🃏 КОЛОДА', { fontSize: '20px', fill: '#fff' }).setOrigin(0.5);
+                this.add.text(300, 750, '⚔️ БОЙ', { fontSize: '20px', fill: '#fff' }).setOrigin(0.5);
+
+                btnDeckNav.on('pointerdown', () => { 
+                    deckTab.setVisible(true); battleTab.setVisible(false); 
+                    btnDeckNav.setFillStyle(0x3498db); btnBattleNav.setFillStyle(0x34495e);
+                });
+                btnBattleNav.on('pointerdown', () => { 
+                    battleTab.setVisible(true); deckTab.setVisible(false); 
+                    btnBattleNav.setFillStyle(0x3498db); btnDeckNav.setFillStyle(0x34495e);
+                });
             }
         };
                 const GameScene = {
@@ -132,29 +147,28 @@
                 let shuffledDeck = [...window.userDeck].sort(() => Math.random() - 0.5);
                 self.handIds = shuffledDeck.slice(0, 4); self.nextIds = shuffledDeck.slice(4, 8);
                 self.uiElements = [];
-                roleText = this.add.text(10, 10, isHost ? "СИНИЕ (HOST)" : "КРАСНЫЕ (CLIENT)", {fontSize:'14px', fill:'#fff', fontStyle:'bold'}).setDepth(101);
                 
                 timerText = this.add.text(200, 25, '3:00', {fontSize:'28px', fill:'#fff', fontStyle:'bold'}).setOrigin(0.5).setDepth(101);
                 phaseText = this.add.text(200, 50, '', {fontSize:'14px', fill:'#f1c40f', fontStyle:'bold'}).setOrigin(0.5).setDepth(101);
 
                 setupTowers(self);
+                // Отрисовка травы
                 for (let y = 0; y < 600; y += 25) {
                     for (let x = 0; x < 400; x += 25) { this.add.rectangle(x+12.5, y+12.5, 25, 25, ((x+y)/25)%2===0 ? 0x638a4d : 0x739a5d); }
                 }
+                // Река и мосты
                 this.add.rectangle(200, 300, 400, 40, 0x3498db).setDepth(1); 
-                this.add.rectangle(100, 300, 50, 60, 0x7d6752).setDepth(2); this.add.rectangle(300, 300, 50, 60, 0x7d6752).setDepth(2); 
-                for(let i=0; i<4; i++) {
-                    this.add.rectangle(100, 277+i*15, 50, 2, 0x4a3c31).setDepth(3); this.add.rectangle(300, 277+i*15, 50, 2, 0x4a3c31).setDepth(3);
-                }
+                this.add.rectangle(100, 300, 50, 60, 0x7d6752).setDepth(2); 
+                this.add.rectangle(300, 300, 50, 60, 0x7d6752).setDepth(2); 
+                
                 this.add.rectangle(200, 700, 400, 200, 0x2c3e50).setDepth(100);
                 elixirText = this.add.text(140, 620, '💧 5', {fontSize:'28px', fill:'#3498db', fontStyle:'bold'}).setDepth(101);
                 
+                // ПАНЕЛЬ ЭМОЦИЙ
                 let emoteBtn = self.add.circle(30, 450, 20, 0x34495e).setInteractive().setDepth(101);
                 self.add.text(30, 450, '💬', {fontSize:'20px'}).setOrigin(0.5).setDepth(102);
                 let emotePanel = self.add.container(200, 400).setDepth(150).setVisible(false);
                 emotePanel.add(self.add.rectangle(0, 0, 300, 220, 0x000000, 0.9).setStrokeStyle(2, 0xffffff));
-                let closeBtn = self.add.text(130, -95, 'X', {fontSize:'20px', fill:'#e74c3c'}).setInteractive().on('pointerdown', ()=>emotePanel.setVisible(false));
-                emotePanel.add(closeBtn);
                 emoteBtn.on('pointerdown', () => emotePanel.setVisible(!emotePanel.visible));
                 
                 let emotes = ['👍', '😂', '😭', '😠'];
@@ -177,290 +191,214 @@
                     self.handIds.forEach((id, i) => {
                         let cData = window.allCardsData.find(c => c.id === id);
                         let btn = self.add.rectangle(100+i*90, 720, 80, 100, cData.color).setInteractive().setDepth(101);
-                        let txt1 = self.add.text(100+i*90, 680, cData.id.toUpperCase(), {fontSize:'10px', fill:'#000', fontStyle:'bold'}).setOrigin(0.5).setDepth(102);
-                        let txt2 = self.add.text(100+i*90, 740, "💧"+cData.c, {fontSize:'14px', fill:'#fff', fontStyle:'bold'}).setOrigin(0.5).setDepth(102);
                         btn.on('pointerdown', () => { 
-                            if (gameState.tiebreakerStarted) return; 
-                            selectedCardObj = { data: cData, index: i }; self.uiElements.forEach(e => { if(e.type === 'Rectangle' && e.depth === 101) e.setStrokeStyle(0); }); btn.setStrokeStyle(4, 0xf1c40f); 
+                            selectedCardObj = { data: cData, index: i }; 
+                            self.uiElements.forEach(e => { if(e.type === 'Rectangle' && e.isButton) e.setStrokeStyle(0); });
+                            btn.setStrokeStyle(4, 0xf1c40f); 
                         });
-                        self.uiElements.push(btn, txt1, txt2);
+                        btn.isButton = true;
+                        self.uiElements.push(btn, self.add.text(100+i*90, 680, cData.id.toUpperCase(), {fontSize:'10px', fill:'#000'}).setOrigin(0.5).setDepth(102));
+                        self.uiElements.push(self.add.text(100+i*90, 740, "💧"+cData.c, {fontSize:'14px', fill:'#fff'}).setOrigin(0.5).setDepth(102));
                     });
-                    let nextData = window.allCardsData.find(c => c.id === self.nextIds[0]);
-                    self.uiElements.push(self.add.rectangle(30, 720, 40, 50, nextData.color).setDepth(101), self.add.text(30, 720, "NEXT\n💧"+nextData.c, {fontSize:'9px', fill:'#fff', align:'center', fontStyle:'bold'}).setOrigin(0.5).setDepth(102));
                 };
                 self.renderHand();
-                
-                this.input.on('pointerdown', (p) => {
-                    if (!selectedCardObj || p.y > 600 || !playerRole || isGameOver || gameState.tiebreakerStarted) return;
-                    let cData = selectedCardObj.data; if (cData.id !== 'fireball' && cData.id !== 'arrows' && cData.id !== 'log' && p.y < 350) return; 
+                                this.input.on('pointerdown', (p) => {
+                    if (!selectedCardObj || p.y > 600 || !playerRole || isGameOver) return;
+                    let cData = selectedCardObj.data;
                     if (elixir >= cData.c) {
-                        elixir -= cData.c; let tx = isHost ? p.x : 400 - p.x; let ty = isHost ? p.y : 600 - p.y; let spread = 35; 
-                        if (cData.id === 'archers') { push(unitsRef, {x:tx-spread, y:ty, type:'archer', owner:playerRole, lane:(tx-spread<200?'left':'right')}); push(unitsRef, {x:tx+spread, y:ty, type:'archer', owner:playerRole, lane:(tx+spread<200?'left':'right')}); }
-                        else if (cData.id === 'goblins') { push(unitsRef, {x:tx-spread, y:ty-15, type:'goblin', owner:playerRole, lane:(tx-spread<200?'left':'right')}); push(unitsRef, {x:tx+spread, y:ty-15, type:'goblin', owner:playerRole, lane:(tx+spread<200?'left':'right')}); push(unitsRef, {x:tx, y:ty+15, type:'goblin', owner:playerRole, lane:(tx<200?'left':'right')}); }
-                        else if (cData.id === 'minions') { push(unitsRef, {x:tx-spread, y:ty-15, type:'minion', owner:playerRole, lane:(tx-spread<200?'left':'right')}); push(unitsRef, {x:tx+spread, y:ty-15, type:'minion', owner:playerRole, lane:(tx+spread<200?'left':'right')}); push(unitsRef, {x:tx, y:ty+15, type:'minion', owner:playerRole, lane:(tx<200?'left':'right')}); }
-                        else if (cData.id === 'skeletons') { for(let k=0; k<4; k++) { let sx = tx+(k%2===0?-spread:spread); let sy=ty+(k<2?-15:15); push(unitsRef, {x:sx, y:sy, type:'skeleton', owner:playerRole, lane:(sx<200?'left':'right')}); } }
-                        else push(unitsRef, {x:tx, y:ty, type:cData.id, owner:playerRole, lane:(tx<200?'left':'right')});
-                        let playedId = self.handIds[selectedCardObj.index]; self.handIds[selectedCardObj.index] = self.nextIds.shift(); self.nextIds.push(playedId);
+                        elixir -= cData.c;
+                        let tx = isHost ? p.x : 400 - p.x;
+                        let ty = isHost ? p.y : 600 - p.y;
+                        if (cData.id === 'archers') {
+                            push(unitsRef, {x:tx-35, y:ty, type:'archer', owner:playerRole, lane:tx-35<200?'left':'right'});
+                            push(unitsRef, {x:tx+35, y:ty, type:'archer', owner:playerRole, lane:tx+35<200?'left':'right'});
+                        } else {
+                            push(unitsRef, {x:tx, y:ty, type:cData.id, owner:playerRole, lane:tx<200?'left':'right'});
+                        }
+                        self.handIds[selectedCardObj.index] = self.nextIds.shift();
+                        self.nextIds.push(cData.id);
                         selectedCardObj = null; self.renderHand();
                     }
                 });
-                
-                onChildAdded(unitsRef, (snapshot) => { handleSpawn(self, snapshot.val(), snapshot.key); });
-                onChildRemoved(unitsRef, (snapshot) => { if (unitsMap[snapshot.key]) destroyUnit(snapshot.key); });
-                onChildChanged(unitsRef, (snapshot) => {
-                    let id = snapshot.key; let data = snapshot.val();
-                    if (unitsMap[id] && !isHost && data.hp !== undefined) { unitsMap[id].setData('hp', data.hp); if(data.hp <= 0) destroyUnit(id); }
+
+                onChildAdded(unitsRef, (s) => handleSpawn(self, s.val(), s.key));
+                onChildRemoved(unitsRef, (s) => { if (unitsMap[s.key]) { unitsMap[s.key].destroy(); delete unitsMap[s.key]; } });
+                onChildChanged(unitsRef, (s) => {
+                    let d = s.val();
+                    if (unitsMap[s.key] && !isHost && d.hp !== undefined) {
+                        unitsMap[s.key].setData('hp', d.hp);
+                        if (d.hp <= 0) { unitsMap[s.key].destroy(); delete unitsMap[s.key]; }
+                    }
                 });
-                if (!isHost) {
-                    onValue(towersRef, (snapshot) => {
-                        const data = snapshot.val(); if (data) towerGroup.children.entries.forEach(t => {
-                            let tid = t.getData('id'); if (data[tid] && data[tid].hp !== undefined) {
-                                let hp = data[tid].hp; t.setData('hp', hp);
-                                if(t.getData('bar')) t.getData('bar').width = (hp/t.getData('maxHp'))*(t.getData('isM')?60:40);
-                                if (hp <= 0 && t.active) destroyTower(self, t);
-                                if (t.getData('isM') && !t.getData('isA') && hp < t.getData('maxHp')) {
-                                    t.setData('isA', true); if(t.getData('weapon')) t.getData('weapon').setVisible(true);
-                                }
-                            }
-                        });
-                    });
-                }
-                onChildAdded(eventsRef, (snapshot) => { 
-                    let ev = snapshot.val(); 
-                    if(ev.type === 'spell_boom') doSpellBoom(self, ev.x, ev.y, ev.owner, ev.spellId);
-                    if(ev.type === 'logRoll') doLogRoll(self, ev.x, ev.y, ev.owner, snapshot.key);
-                    if(ev.type === 'chat') {
+                
+                onChildAdded(eventsRef, (s) => {
+                    let ev = s.val();
+                    if (ev.type === 'chat') {
                         let isMeChat = ev.side === playerRole;
                         let bubble = self.add.container(isMeChat ? 270 : 130, isMeChat ? 480 : 120).setDepth(200);
-                        bubble.add(self.add.rectangle(0, 0, 140, 40, 0xffffff).setStrokeStyle(2, 0x000));
-                        bubble.add(self.add.text(0, 0, ev.msg, {fontSize: ev.msg.length>2?'12px':'25px', fill:'#000', align:'center', wordWrap:{width:130}}).setOrigin(0.5));
+                        bubble.add([self.add.rectangle(0, 0, 140, 40, 0xffffff).setStrokeStyle(2, 0x000), 
+                                    self.add.text(0, 0, ev.msg, {fontSize: ev.msg.length>2?'12px':'25px', fill:'#000'}).setOrigin(0.5)]);
                         self.time.delayedCall(2500, () => bubble.destroy());
-                    }
+                    } else if (ev.type === 'spell_boom') doSpellBoom(self, ev.x, ev.y, ev.owner, ev.spellId);
                 });
             },
             update: function(time) {
-                if (isGameOver || !playerRole || !gameState.startTime) return; 
+                if (isGameOver || !playerRole || !gameState.startTime) return;
                 let elapsed = (Date.now() - gameState.startTime) / 1000;
-                let remaining = 180 - elapsed; let mult = 1;
-
-                if (elapsed < 120) { phaseText.setText(''); }
-                else if (elapsed >= 120 && elapsed < 180) { phaseText.setText('x2 ELIXIR'); mult = 2; }
-                else if (elapsed >= 180) {
-                    if (isHost && !gameState.overtimeDecided) {
-                        let meT = 0, enT = 0;
-                        towerGroup.children.entries.forEach(t => { if(t.active) { if(t.getData('side') === 'me') meT++; else enT++; } });
-                        if (meT === enT) dbUpdate(ref(db, `${gamePath}/state`), { overtimeDecided: true, isOvertime: true });
-                        else dbUpdate(ref(db, `${gamePath}/state`), { overtimeDecided: true, isOvertime: false, endWinner: meT > enT ? 'me' : 'enemy' });
-                    }
-                    if (gameState.overtimeDecided) {
-                        if (!gameState.isOvertime) {
-                            isGameOver = true; let iWon = (gameState.endWinner === playerRole);
-                            this.add.text(60, 300, iWon ? 'ПОБЕДА!' : 'ПОРАЖЕНИЕ!', {fontSize:'45px', fill: iWon?'#f1c40f':'#e74c3c', fontStyle:'bold'}).setDepth(200); return;
-                        }
-                        remaining = 240 - elapsed;
-                        if (remaining > 0) { phaseText.setText('BONUS TIME!\nx3 ELIXIR'); mult = 3; } 
-                        else {
-                            remaining = 0; phaseText.setText('TIEBREAKER!\nSUDDEN DEATH'); mult = 0;
-                            if (isHost && !gameState.tiebreakerStarted) dbUpdate(ref(db, `${gamePath}/state`), { tiebreakerStarted: true });
-                        }
-                    }
-                }
-                
+                let remaining = 180 - elapsed, mult = (elapsed > 120) ? 2 : 1;
+                if (elapsed > 180) { remaining = 240 - elapsed; mult = 3; phaseText.setText('OVERTIME x3'); }
                 let disp = Math.max(0, Math.floor(remaining));
                 timerText.setText(Math.floor(disp/60) + ':' + (disp%60<10?'0':'') + disp%60);
-                if (!gameState.tiebreakerStarted && elixir < 10) elixir += 0.0035 * mult;
+                if (elixir < 10) elixir += 0.0035 * mult;
                 elixirText.setText('💧 ' + Math.floor(elixir));
 
                 projectiles.children.entries.forEach(p => {
-                    let target = p.getData('target'); if (!target || !target.active) { p.destroy(); return; }
-                    if (Phaser.Math.Distance.Between(p.x, p.y, target.x, target.y) < 15) {
-                        if (isHost) target.getData('isT') ? updateTowerHP(this, target, p.getData('dmg')) : applyUnitDmg(target, p.getData('dmg'), p.getData('dbKey'));
+                    let t = p.getData('target'); if (!t || !t.active) { p.destroy(); return; }
+                    let ang = Phaser.Math.Angle.Between(p.x, p.y, t.x, t.y);
+                    p.x += Math.cos(ang)*10; p.y += Math.sin(ang)*10; p.rotation = ang;
+                    if (Phaser.Math.Distance.Between(p.x, p.y, t.x, t.y) < 15) {
+                        if (isHost) t.getData('isT') ? updateTowerHP(this, t, p.getData('dmg')) : applyUnitDmg(t, p.getData('dmg'), p.getData('dbKey'));
                         p.destroy();
-                    } else { let angle = Phaser.Math.Angle.Between(p.x, p.y, target.x, target.y); p.x += Math.cos(angle)*10; p.y += Math.sin(angle)*10; p.rotation=angle; }
-                });
-                hpBarsGroup.children.entries.forEach(bar => {
-                    let owner = bar.getData('owner'); if (!owner || !owner.active) bar.destroy();
-                    else { bar.setPosition(owner.x, owner.y-20); bar.width = Math.max(0, (owner.getData('hp')/owner.getData('maxHp'))*25); }
+                    }
                 });
 
                 if (time > lastLogic + 100) {
-                    lastLogic = time; 
-                    if (gameState.tiebreakerStarted && isHost) {
-                        Object.keys(unitsMap).forEach(k => applyUnitDmg(unitsMap[k], 9999, k)); 
-                        towerGroup.children.entries.forEach(t => { if(t.active) updateTowerHP(this, t, 15); }); 
-                        return; 
-                    }
+                    lastLogic = time;
                     Object.keys(unitsMap).forEach(id => {
                         let u = unitsMap[id]; if (!u || !u.active) return;
-                        let type = u.getData('type'); let side = u.getData('owner'); let target = u.getData('lockedTarget');
-                        let range = type === 'archer' ? 140 : 65; 
-                        
-                        if (type === 'prince') {
-                            if (!u.getData('isMoving') || (target && target.active && Phaser.Math.Distance.Between(u.x, u.y, target.x, target.y) <= range)) {
-                                u.setData('chargeTime', 0);
-                                if (u.getData('inCharge')) { u.setData('inCharge', false); u.setData('spd', u.getData('baseSpd')); if(u.getData('cFX')) u.getData('cFX').destroy(); }
-                            } else {
-                                let ct = (u.getData('chargeTime') || 0) + 100; u.setData('chargeTime', ct);
-                                if (ct >= 3000 && !u.getData('inCharge')) {
-                                    u.setData('inCharge', true); u.setData('spd', u.getData('baseSpd') * 2); 
-                                    let f = this.add.circle(0, 0, 15, 0xe74c3c, 0.5); u.add(f); u.setData('cFX', f);
-                                }
-                            }
-                        }
-                        if (time > (u.getData('lastDecay') || 0) + 1000 && u.getData('isB') && isHost) { u.setData('lastDecay', time); applyUnitDmg(u, 13.5, id); }
-                        
-                        let possibleTargets = [...towerGroup.children.entries.filter(t => t.getData('side') !== side && t.active)];
-                        if (type !== 'giant') possibleTargets = possibleTargets.concat(Object.values(unitsMap).filter(eu => eu.active && eu.getData('owner') !== side && !eu.getData('isB') && (!eu.getData('isFlying') || type === 'archer'))).concat(Object.values(unitsMap).filter(b => b.getData('isB') && b.getData('owner') !== side && b.active));
-                        
-                        let distT = target && target.active ? Phaser.Math.Distance.Between(u.x, u.y, target.x, target.y) : 9999;
-                        let isAttacking = distT <= range && !u.getData('isB');
-                        
-                        if (!isAttacking) {
-                            let newTarget = this.physics.closest(u, possibleTargets);
-                            if (newTarget) { target = newTarget; u.setData('lockedTarget', target); distT = Phaser.Math.Distance.Between(u.x, u.y, target.x, target.y); }
-                        }
-
-                        if (target && target.active && !u.getData('isB')) {
-                            if (distT <= range) {
-                                u.body.setVelocity(0); u.setData('isMoving', false);
-                                u.rotation = Phaser.Math.Angle.Between(u.x, u.y, target.x, target.y) + Math.PI/2;
+                        let side = u.getData('owner'), range = u.getData('type') === 'archer' ? 140 : 65;
+                        let targets = [...towerGroup.children.entries.filter(t => t.getData('side') !== side && t.active)];
+                        targets = targets.concat(Object.values(unitsMap).filter(eu => eu.active && eu.getData('owner') !== side));
+                        let closest = this.physics.closest(u, targets);
+                        if (closest) {
+                            let dist = Phaser.Math.Distance.Between(u.x, u.y, closest.x, closest.y);
+                            if (dist <= range) {
+                                u.body.setVelocity(0);
+                                u.rotation = Phaser.Math.Angle.Between(u.x, u.y, closest.x, closest.y) + Math.PI/2;
                                 if (time > (u.getData('lastAtk') || 0) + u.getData('atkSpd')) {
-                                    u.setData('lastAtk', time); let dmg = u.getData('pwr');
-                                    if (type === 'prince' && u.getData('inCharge')) { dmg *= 2; u.setData('chargeTime', 0); u.setData('inCharge', false); u.setData('spd', u.getData('baseSpd')); if(u.getData('cFX')) u.getData('cFX').destroy(); }
-                                    if (type === 'archer') launchProj(this, u, target, dmg, 'arrow', target.getData('dbKey'));
-                                    else if (isHost) target.getData('isT') ? updateTowerHP(this, target, dmg) : applyUnitDmg(target, dmg, target.getData('dbKey'));
+                                    u.setData('lastAtk', time);
+                                    if (u.getData('type') === 'archer') launchProj(this, u, closest, u.getData('pwr'), 'arrow', closest.getData('dbKey'));
+                                    else if (isHost) applyUnitDmg(closest, u.getData('pwr'), closest.getData('dbKey'));
                                 }
-                            } else { 
-                                let destX = target.x, destY = target.y;
-                                if (!u.getData('isFlying')) {
-                                    let isLocalVisual = (side === playerRole); 
-                                    let targetIsAcross = (u.y < 280 && target.y > 320) || (u.y > 320 && target.y < 280);
-                                    if (targetIsAcross) {
-                                        let absBX = (u.getData('lane') === 'left') ? 100 : 300;
-                                        destX = isHost ? absBX : 400 - absBX; destY = (u.y < 280) ? 340 : 260; 
-                                    }
+                            } else {
+                                let dx = closest.x, dy = closest.y;
+                                if (Math.abs(u.y - 300) > 20 && Math.abs(dy - 300) > 20 && (u.y - 300) * (dy - 300) < 0) {
+                                    dx = u.getData('lane') === 'left' ? 100 : 300;
+                                    dy = u.y < 300 ? 340 : 260;
                                 }
-                                this.physics.moveTo(u, destX, destY, u.getData('spd'));
-                                u.rotation = Phaser.Math.Angle.Between(u.x, u.y, destX, destY) + Math.PI/2;
-                                u.setData('isMoving', true); 
+                                this.physics.moveTo(u, dx, dy, u.getData('spd'));
+                                u.rotation = Phaser.Math.Angle.Between(u.x, u.y, dx, dy) + Math.PI/2;
                             }
-                        } else if (u.getData('isB') && target && target.active && distT < 180 && !target.getData('isFlying')) {
-                            if (u.getData('weapon')) u.getData('weapon').rotation = Phaser.Math.Angle.Between(u.x, u.y, target.x, target.y) + Math.PI/2;
-                            if (time > (u.getData('lastAtk') || 0) + u.getData('atkSpd')) { u.setData('lastAtk', time); launchProj(this, u, target, u.getData('pwr'), 'ball', target.getData('dbKey')); }
                         }
                     });
-                    
-                    towerGroup.children.entries.forEach(t => {
-                        if (!t.active) return;
-                        if (t.getData('isM') && !t.getData('isA') && t.getData('hp') < t.getData('maxHp')) {
-                            t.setData('isA', true); if(t.getData('weapon')) t.getData('weapon').setVisible(true);
-                        }
-                        if (!t.getData('isA')) return;
-                        let enemies = Object.values(unitsMap).filter(u => u.active && u.getData('owner') !== t.getData('side'));
-                        let closest = this.physics.closest(t, enemies);
-                        if (closest && Phaser.Math.Distance.Between(t.x, t.y, closest.x, closest.y) < (t.getData('isM')?160:185)) {
-                            if (t.getData('weapon')) t.getData('weapon').rotation = Phaser.Math.Angle.Between(t.x, t.y, closest.x, closest.y) + Math.PI/2;
-                            if (time > t.getData('lastS') + 1000) { t.setData('lastS', time); launchProj(this, t, closest, t.getData('isM')?55:42, t.getData('isM')?'ball':'arrow', closest.getData('dbKey')); }
-                  function handleSpawn(scene, data, key) {
-            let tx = isHost ? data.x : 400 - data.x; let ty = isHost ? data.y : 600 - data.y;
-            if (data.type === 'fireball') {
-                let spr = scene.add.circle(tx, (data.owner===playerRole ? 850 : -50), 15, 0xe67e22).setDepth(60);
-                scene.tweens.add({ targets: spr, x: tx, y: ty, duration: 1500, 
-                    onUpdate: () => {
-                        let sz = Math.random()*6+4;
-                        let p = scene.add.rectangle(spr.x+(Math.random()-0.5)*20, spr.y+(Math.random()-0.5)*20, sz, sz, Math.random()>0.5?0xf1c40f:0xe74c3c).setDepth(59);
-                        scene.tweens.add({targets: p, alpha: 0, scale: 0.1, duration: 500, onComplete: () => p.destroy()});
-                    },
-                    onComplete: () => { spr.destroy(); if (isHost) { push(eventsRef, { type: 'spell_boom', x: data.x, y: data.y, owner: data.owner, spellId: data.type }); remove(ref(db, `${gamePath}/units/${key}`)); } }
-                }); return;
-            }
-            if (data.type === 'arrows') {
-                let spr = scene.add.container(tx, (data.owner===playerRole ? 850 : -50)).setDepth(60);
-                for(let i=0; i<15; i++) { spr.add(scene.add.rectangle((Math.random()-0.5)*70, (Math.random()-0.5)*70, 2, 20, 0x5d4037)); }
-                scene.tweens.add({ targets: spr, x: tx, y: ty, duration: 800, 
-                    onComplete: () => { scene.time.delayedCall(50, () => { spr.destroy(); }); if (isHost) { push(eventsRef, { type: 'spell_boom', x: data.x, y: data.y, owner: data.owner, spellId: data.type }); remove(ref(db, `${gamePath}/units/${key}`)); } }
-                }); return;
-            }
-            if (data.type === 'log' && isHost) { push(eventsRef, { type: 'logRoll', x: data.x, y: data.y, owner: data.owner }); remove(ref(db, `${gamePath}/units/${key}`)); return; }
-            let cfgs = { knight:{s:20, p:40, h:450, sz:22, a:1200}, giant:{s:13, p:100, h:860, sz:30, a:2000}, archer:{s:17, p:30, h:160, sz:16, a:1200}, goblin:{s:30, p:20, h:90, sz:14, a:1000}, minipekka:{s:35, p:260, h:380, sz:20, a:2000}, cannon:{s:0, p:38, h:400, sz:30, isB: true, a:3000}, minion:{s:25, p:40, h:90, sz:14, a:1000, isFlying: true}, skeleton:{s:25, p:10, h:1, sz:10, a:1000}, prince:{s:22, p:230, h:450, sz:22, a:2000} };
-            let c = cfgs[data.type]; if (isHost && data.hp === undefined) dbUpdate(ref(db, `${gamePath}/units/${key}`), { hp: c.h }); createU(scene, tx, ty, data.owner, c, data.type, key, data.lane);
-        }
-
-        function doSpellBoom(scene, x, y, owner, type) {
-            let tx = isHost ? x : 400 - x, ty = isHost ? y : 600 - y; let isFB = type === 'fireball'; let rad = isFB ? 60 : 80;
-            if (isFB) { let f = scene.add.circle(tx, ty, rad, 0xe67e22, 0.6).setDepth(50); scene.time.delayedCall(300, () => { if(f) f.destroy(); }); } 
-            else { let a = scene.add.circle(tx, ty, rad, 0xe74c3c, 0.4).setDepth(50); scene.time.delayedCall(100, () => { if(a) a.destroy(); }); }
-            if (isHost) {
-                let tDmg = isFB ? 200 : 65; let uDmg = isFB ? 150 : 160; 
-                towerGroup.children.entries.forEach(t => { if (t.active && Phaser.Math.Distance.Between(tx, ty, t.x, t.y) < rad+20 && t.getData('side') !== owner) updateTowerHP(scene, t, tDmg); });
-                Object.values(unitsMap).forEach(u => { if (u.active && Phaser.Math.Distance.Between(tx, ty, u.x, u.y) < rad && u.getData('owner') !== owner) applyUnitDmg(u, uDmg, u.getData('dbKey')); });
-            }
-        }
-
-        function doLogRoll(scene, x, y, owner, key) {
-            let tx = isHost ? x : 400 - x, ty = isHost ? y : 600 - y; let logSpr = scene.add.container(tx, ty).setDepth(45);
-            logSpr.add([scene.add.rectangle(0, 0, 70, 20, 0xd35400), scene.add.rectangle(-20, 0, 4, 24, 0x7f8c8d), scene.add.rectangle(0, 0, 4, 24, 0x7f8c8d), scene.add.rectangle(20, 0, 4, 24, 0x7f8c8d)]);
-            let hitSet = new Set();
-            scene.tweens.add({ targets: logSpr, y: ty+(owner===playerRole ? -280 : 280), duration: 1500,
-                onUpdate: () => { if (isHost) {
-                    Object.keys(unitsMap).forEach(k => { let u = unitsMap[k]; if (u.active && u.getData('owner') !== owner && !u.getData('isB') && !u.getData('isFlying') && !hitSet.has(k) && Math.abs(logSpr.x-u.x) < 50 && Math.abs(logSpr.y-u.y) < 30) { applyUnitDmg(u, 100, k); hitSet.add(k); } });
-                    towerGroup.children.entries.forEach(t => { if (t.active && t.getData('side') !== owner && !hitSet.has(t.getData('id')) && Math.abs(logSpr.x-t.x) < 60 && Math.abs(logSpr.y-t.y) < 40) { updateTowerHP(scene, t, 39); hitSet.add(t.getData('id')); } });
-                } }, onComplete: () => { logSpr.destroy(); if(isHost) remove(ref(db, `${gamePath}/events/${key}`)); }
-            });
-        }
-
-        function createU(scene, x, y, owner, c, type, key, lane) {
-            let isMe = owner === playerRole; let u = scene.add.container(x, y).setDepth(c.isFlying?20:15); scene.physics.add.existing(u); u.body.setSize(c.sz, c.sz).setOffset(-c.sz/2, -c.sz/2); let dirY = -1; 
-            if (type === 'cannon') {
-                u.add(scene.add.rectangle(0, 0, c.sz, c.sz, 0x6e4b30)); let gunGrp = scene.add.container(0,0); gunGrp.add(scene.add.circle(0, 0, 8, 0x7f8c8d)); gunGrp.add(scene.add.rectangle(0, dirY*10, 6, 20, 0x7f8c8d)); u.add(gunGrp); u.setData('weapon', gunGrp);
-            }
-            else if (type === 'skeleton') u.add(scene.add.rectangle(0, 0, c.sz, c.sz, 0xffffff));
-            else if (type === 'prince') {
-                let col = isMe?0x2980b9:0xc0392b; u.add(scene.add.rectangle(0, dirY*5, 18, 35, 0x6e4b30)); u.add(scene.add.rectangle(0, dirY*25, 10, 16, 0x4a321f)); u.add(scene.add.rectangle(0, 0, c.sz, c.sz, col)); u.add(scene.add.rectangle(14, dirY*15, 4, 40, 0x7f8c8d)); 
-            } else if (type === 'giant') { u.add(scene.add.rectangle(0, 0, 30, 30, 0xffcc99)); u.add(scene.add.rectangle(0, 0, 24, 30, 0x8b4513)); u.add(scene.add.rectangle(0, dirY*8, 14, 14, 0xffcc99)); } 
-            else if (type === 'archer') { u.add(scene.add.circle(0, 0, 8, 0xe84393)); } 
-            else if (type === 'minipekka') { u.add(scene.add.rectangle(0, 0, c.sz, c.sz, 0x34495e)); u.add(scene.add.rectangle(c.sz/2+4, dirY*6, 6, 22, 0x2980b9)); u.add(scene.add.rectangle(0, dirY*2, 10, 4, 0x00ffff)); } 
-            else if (type === 'knight') { u.add(scene.add.rectangle(0, 0, c.sz, c.sz, 0x95a5a6)); u.add(scene.add.rectangle(0, 0, c.sz-8, c.sz-8, 0x7f8c8d)); u.add(scene.add.rectangle(0, dirY*(c.sz/2-4), 10, 4, 0xffcc99)); u.add(scene.add.rectangle(c.sz/2+4, 0, 6, 6, 0xecf0f1)); } 
-            else { let col = isMe?0x2980b9:0xc0392b; let body = scene.add.rectangle(0, 0, c.sz, c.sz, col); u.add(body); if (type === 'goblin') { body.setFillStyle(0x1abc9c); u.add(scene.add.rectangle(c.sz/2+2, dirY*4, 2, 10, 0xecf0f1)); } else if (type === 'minion') u.add([scene.add.rectangle(-8, dirY*2, 8, 12, 0x8e44ad), scene.add.rectangle(8, dirY*2, 8, 12, 0x8e44ad)]); }
-
-            u.rotation = isMe ? 0 : Math.PI;
-            u.setData({spd:c.s, baseSpd:c.s, pwr:c.p, type:type, owner:owner, lane:lane, hp:c.h, maxHp:c.h, dbKey:key, isB:!!c.isB, atkSpd:c.a, isFlying:!!c.isFlying, chargeTime:0, inCharge:false, isMoving:false});
-            let barCol = isMe ? 0x2ecc71 : 0xe74c3c; hpBarsGroup.add(scene.add.rectangle(x, y-20, 25, 3, barCol).setDepth(21).setData('owner', u)); unitsMap[key] = u;
-        }
-
-        function destroyUnit(id) { if (unitsMap[id]) { let hpB = unitsMap[id].getData('hpBar'); if(hpB) hpB.destroy(); let cFX = unitsMap[id].getData('cFX'); if(cFX) cFX.destroy(); unitsMap[id].destroy(); delete unitsMap[id]; } }
-        function destroyTower(scene, t) { 
-            if (!t.active) return; 
-            if (!t.getData('isM')) { let k = towerGroup.children.entries.find(it => it.getData('isM') && it.getData('side') === t.getData('side')); if(k) {k.setData('isA', true); if(k.getData('weapon')) k.getData('weapon').setVisible(true);} } 
-            if (t.getData('isM') || gameState.isOvertime || gameState.tiebreakerStarted) { isGameOver = true; let iWon = t.getData('side') !== playerRole; scene.add.text(60, 300, iWon ? 'ПОБЕДА!' : 'ПОРАЖЕНИЕ!', {fontSize:'45px', fill: iWon?'#f1c40f':'#e74c3c', fontStyle:'bold'}).setDepth(200); }
-            let bg = t.getData('bg'); if(bg) bg.destroy(); let bar = t.getData('bar'); if(bar) bar.destroy(); t.destroy(); 
-        }
-
-        function setupTowers(scene) { 
-            towerGroup.clear(true, true); 
-            const ts = [{id:'eL', x:100, y:100, s:'enemy', m:false, l:'left'}, {id:'eR', x:300, y:100, s:'enemy', m:false, l:'right'}, {id:'eM', x:200, y:50, s:'enemy', m:true, l:'mid'}, {id:'mL', x:100, y:500, s:'me', m:false, l:'left'}, {id:'mR', x:300, y:500, s:'me', m:false, l:'right'}, {id:'mM', x:200, y:550, s:'me', m:true, l:'mid'}];
-            ts.forEach(d => { 
-                let tx = isHost?d.x:400-d.x, ty = isHost?d.y:600-d.y; let isMe = d.s === playerRole; let col = isMe?0x2980b9:0xc0392b; let w = d.m?50:40; let t = scene.add.container(tx, ty).setDepth(5); scene.physics.add.existing(t, true); t.body.setSize(w, w).setOffset(-w/2, -w/2); 
-                t.add(scene.add.rectangle(0, 0, w, w, 0x7f8c8d)); t.add(scene.add.rectangle(0, 0, w-10, w-10, 0x34495e));
-                let dirY = isMe ? -1 : 1;
-                if (d.m) {
-                    t.add(scene.add.rectangle(0, -dirY * (w/2 - 4), 30, 8, col)); t.add(scene.add.rectangle(0, 0, 20, 10, col)); t.add(scene.add.circle(0, dirY * 2, 8, 0xffcc99)); t.add(scene.add.rectangle(0, dirY * 6, 10, 4, 0x8b4513)); t.add(scene.add.rectangle(0, -dirY * 2, 12, 4, 0xf1c40f)); 
-                    let kingCannon = scene.add.rectangle(0, dirY * 15, 8, 16, 0x000000); kingCannon.setVisible(false); t.add(kingCannon); t.setData('weapon', kingCannon);
-                } else {
-                    t.add(scene.add.rectangle(0, -dirY * (w/2 - 4), 20, 8, col)); t.add(scene.add.circle(0, 0, 8, 0xe84393)); let bow = scene.add.rectangle(0, dirY * 12, 16, 3, 0x8b4513); t.add(bow); t.setData('weapon', bow);
                 }
-                towerGroup.add(t); let barCol = isMe ? 0x2ecc71 : 0xe74c3c; 
-                t.setData({id:d.id, hp:d.m?2500:1300, maxHp:d.m?2500:1300, side:d.s, isM:d.m, isA:!d.m, lane:d.l, isT:true, lastS:0, bar: scene.add.rectangle(tx, ty-35, d.m?60:40, 6, barCol).setDepth(11), bg: scene.add.rectangle(tx, ty-35, d.m?60:40, 6, 0x333333).setDepth(10)}); 
-            });
-            if (isHost) ts.forEach(d => { dbUpdate(ref(db, `${gamePath}/towers/${d.id}`), { hp: d.m?2500:1300 }); }); 
+            }
+        };
+        function handleSpawn(scene, d, k) {
+    let tx = isHost ? d.x : 400 - d.x, ty = isHost ? d.y : 600 - d.y;
+    if (d.type === 'fireball') {
+        let s = scene.add.circle(tx, d.owner === playerRole ? 850 : -50, 15, 0xe67e22).setDepth(60);
+        scene.tweens.add({ targets: s, x: tx, y: ty, duration: 1200, onUpdate: () => {
+            let p = scene.add.rectangle(s.x + (Math.random()-0.5)*20, s.y + (Math.random()-0.5)*20, 6, 6, 0xf1c40f);
+            scene.tweens.add({targets: p, alpha: 0, scale: 0.1, duration: 400, onComplete: () => p.destroy()});
+        }, onComplete: () => { s.destroy(); if(isHost){ push(eventsRef, {type:'spell_boom', x:d.x, y:d.y, owner:d.owner, spellId:'fireball'}); remove(ref(db, `${gamePath}/units/${k}`)); }}});
+        return;
+    }
+    let cfgs = {
+        knight:{s:20, p:40, h:450, sz:22, a:1200}, giant:{s:13, p:100, h:860, sz:30, a:2000},
+        archer:{s:17, p:30, h:160, sz:16, a:1200}, goblin:{s:30, p:20, h:90, sz:14, a:1000},
+        minipekka:{s:35, p:260, h:380, sz:20, a:2000}, cannon:{s:0, p:38, h:400, sz:30, isB:true, a:3000},
+        minion:{s:25, p:40, h:90, sz:14, a:1000}, skeleton:{s:25, p:10, h:1, sz:10, a:1000}, prince:{s:22, p:230, h:450, sz:22, a:2000}
+    };
+    let c = cfgs[d.type] || cfgs.knight;
+    if (isHost && d.hp === undefined) dbUpdate(ref(db, `${gamePath}/units/${k}`), { hp: c.h });
+    createU(scene, tx, ty, d.owner, c, d.type, k, d.lane);
+}
+
+function createU(scene, x, y, owner, c, type, key, lane) {
+    let isMe = owner === playerRole, u = scene.add.container(x, y);
+    scene.physics.add.existing(u); u.body.setSize(c.sz, c.sz).setOffset(-c.sz/2, -c.sz/2);
+    let col = isMe ? 0x3498db : 0xe74c3c;
+    if (type === 'minipekka') {
+        u.add([scene.add.rectangle(0, 0, 20, 20, 0x2c3e50), scene.add.rectangle(0, -6, 12, 4, 0x00ffff), scene.add.rectangle(12, -4, 4, 18, 0x7f8c8d)]);
+    } else if (type === 'prince') {
+        u.add([scene.add.rectangle(0, 0, 22, 22, col), scene.add.rectangle(12, -10, 4, 35, 0xf1c40f), scene.add.rectangle(0, -12, 16, 6, 0x000)]);
+    } else if (type === 'giant') {
+        u.add([scene.add.rectangle(0, 0, 30, 35, 0xe67e22), scene.add.rectangle(0, -10, 20, 20, 0xffcc99)]);
+    } else if (type === 'cannon') {
+        u.add(scene.add.rectangle(0, 0, 30, 30, 0x7f8c8d));
+        let g = scene.add.container(0, 0); g.add(scene.add.rectangle(0, -12, 8, 20, 0x000)); u.add(g); u.setData('weapon', g);
+    } else {
+        u.add(scene.add.rectangle(0, 0, c.sz, c.sz, col));
+        if(type === 'archer') u.add(scene.add.circle(0, 0, 6, 0xe84393));
+    }
+    u.rotation = isMe ? 0 : Math.PI;
+    u.setData({spd:c.s, pwr:c.p, type:type, owner:owner, lane:lane, hp:c.h, maxHp:c.h, dbKey:key, atkSpd:c.a});
+    hpBarsGroup.add(scene.add.rectangle(x, y-22, 25, 4, isMe?0x2ecc71:0xe74c3c).setDepth(21).setData('owner', u));
+    unitsMap[key] = u;
+}
+
+function setupTowers(scene) {
+    towerGroup.clear(true, true);
+    const ts = [
+        {id:'eL', x:100, y:100, s:'enemy', m:false}, {id:'eR', x:300, y:100, s:'enemy', m:false}, {id:'eM', x:200, y:50, s:'enemy', m:true},
+        {id:'mL', x:100, y:500, s:'me', m:false}, {id:'mR', x:300, y:500, s:'me', m:false}, {id:'mM', x:200, y:550, s:'me', m:true}
+    ];
+    ts.forEach(d => {
+        let tx = isHost ? d.x : 400 - d.x, ty = isHost ? d.y : 600 - d.y, isMe = d.s === playerRole, w = d.m ? 50 : 40;
+        let t = scene.add.container(tx, ty); scene.physics.add.existing(t, true);
+        t.add([scene.add.rectangle(0, 0, w, w, 0x7f8c8d), scene.add.rectangle(0, 0, w-10, w-10, isMe?0x2980b9:0xc0392b)]);
+        let dirY = isMe ? -1 : 1;
+        if (d.m) {
+            t.add(scene.add.circle(0, dirY*2, 8, 0xffcc99));
+            let g = scene.add.rectangle(0, dirY*15, 10, 18, 0x000).setVisible(false); t.add(g); t.setData('weapon', g);
+        } else {
+            t.add(scene.add.circle(0, 0, 8, 0xe84393));
+            let b = scene.add.rectangle(0, dirY*12, 18, 4, 0x000); t.add(b); t.setData('weapon', b);
         }
+        towerGroup.add(t); t.setData({id:d.id, hp:d.m?2500:1300, maxHp:d.m?2500:1300, side:d.s, isM:d.m, isA:!d.m, isT:true, bar:scene.add.rectangle(tx, ty-35, w, 6, isMe?0x2ecc71:0xe74c3c).setDepth(11)});
+    });
+    if(isHost) ts.forEach(d => dbUpdate(ref(db, `${gamePath}/towers/${d.id}`), { hp: d.m?2500:1300 }));
+}
 
-        function launchProj(scene, s, target, dmg, type, key) { let p = type==='arrow'?scene.add.rectangle(s.x, s.y, 10, 2, 0x5d4037):scene.add.circle(s.x, s.y, 8, 0x2c3e50); projectiles.add(p.setDepth(40).setData({target:target, dmg:dmg, dbKey:key})); }
-        function applyUnitDmg(u, d, key) { if (!isHost || !u || !u.active || !u.scene) return; let actualKey = key || u.getData('dbKey'); if (!actualKey) return; let hp = Math.max(0, (u.getData('hp')||0) - d); u.setData('hp', hp); if (hp <= 0) { remove(ref(db, `${gamePath}/units/${actualKey}`)); destroyUnit(actualKey); } else { dbUpdate(ref(db, `${gamePath}/units/${actualKey}`), { hp: hp }); } }
-        function updateTowerHP(scene, t, d) { if (!isHost || !t || !t.active || !t.scene) return; let hp = Math.max(0, (t.getData('hp')||0) - d); t.setData('hp', hp); if (hp <= 0) { remove(ref(db, `${gamePath}/towers/${t.getData('id')}`)); destroyTower(scene, t); } else { dbUpdate(ref(db, `${gamePath}/towers/${t.getData('id')}`), { hp: hp }); if(t.getData('bar')) t.getData('bar').width = (hp/t.getData('maxHp'))*(t.getData('isM')?60:40); } }
+function launchProj(scene, s, t, dmg, type, key) {
+    let p = type === 'arrow' ? scene.add.rectangle(s.x, s.y, 12, 3, 0x000) : scene.add.circle(s.x, s.y, 8, 0x2c3e50);
+    projectiles.add(p.setDepth(40).setData({target:t, dmg:dmg, dbKey:key}));
+}
 
-        const gameConfig = Object.assign({}, config, { scene: [MenuScene, GameScene] }); 
-        const phaserGame = new Phaser.Game(gameConfig);
-    </script>
+function applyUnitDmg(u, d, k) {
+    if (!isHost || !u || !u.active) return;
+    let hp = Math.max(0, u.getData('hp') - d); u.setData('hp', hp);
+    if (hp <= 0) { remove(ref(db, `${gamePath}/units/${k}`)); u.destroy(); delete unitsMap[k]; }
+    else dbUpdate(ref(db, `${gamePath}/units/${k}`), { hp: hp });
+}
+
+function updateTowerHP(scene, t, d) {
+    if (!isHost || !t || !t.active) return;
+    let hp = Math.max(0, t.getData('hp') - d); t.setData('hp', hp);
+    if (hp <= 0) { remove(ref(db, `${gamePath}/towers/${t.getData('id')}`)); destroyTower(scene, t); }
+    else {
+        dbUpdate(ref(db, `${gamePath}/towers/${t.getData('id')}`), { hp: hp });
+        t.getData('bar').width = (hp/t.getData('maxHp')) * (t.getData('isM')?50:40);
+    }
+}
+
+function destroyTower(scene, t) {
+    if (!t.active) return;
+    if (t.getData('isM')) { isGameOver = true; scene.add.text(60, 300, t.getData('side') === playerRole ? 'ПОРАЖЕНИЕ' : 'ПОБЕДА!', {fontSize:'45px', fill:'#f1c40f'}).setDepth(200); }
+    t.destroy();
+}
+
+function doSpellBoom(scene, x, y, owner, id) {
+    let tx = isHost ? x : 400 - x, ty = isHost ? y : 600 - y;
+    let f = scene.add.circle(tx, ty, 60, 0xe67e22, 0.6); scene.time.delayedCall(300, () => f.destroy());
+    if (isHost) {
+        towerGroup.children.entries.forEach(t => { if(t.active && Phaser.Math.Distance.Between(tx, ty, t.x, t.y) < 80 && t.getData('side') !== owner) updateTowerHP(scene, t, 200); });
+        Object.values(unitsMap).forEach(u => { if(u.active && Phaser.Math.Distance.Between(tx, ty, u.x, u.y) < 60 && u.getData('owner') !== owner) applyUnitDmg(u, 150, u.getData('dbKey')); });
+    }
+}
+
+new Phaser.Game({type:Phaser.AUTO, width:400, height:800, parent:'game', physics:{default:'arcade'}, scene:[MenuScene, GameScene]});
+</script>
 </body>
 </html>
